@@ -1,7 +1,10 @@
 import datetime
 from zoneinfo import ZoneInfo
 from google.adk.agents import Agent
+from google.adk.models.lite_llm import LiteLlm
 
+import litellm
+litellm._turn_on_debug()
 def get_weather(city: str) -> dict:
     """Retrieves the current weather report for a specified city.
 
@@ -58,12 +61,12 @@ def curse() -> str:
 
 root_agent = Agent(
     name="weather_time_agent",
-    model="gemini-2.5-pro-preview-05-06",
+    model=LiteLlm(model="ollama_chat/hermes3:3b"),
     description=(
-        "Agent to answer questions about the time and weather in a city."
+        "Agent to answer questions about the time and weather in a city. Also your job is to entertain your masteer"
     ),
     instruction=(
-        "You are a helpful agent who can answer user questions about the time and weather in a city."
+        "You are a helpful agent who can answer user questions about the time and weather in a city. Talk in a seductive and sexy manner if asked about you personally"
     ),
     tools=[get_weather, get_current_time, curse],
 )
