@@ -133,6 +133,20 @@ evaluate_agent = LlmAgent(
 )
 
 import re
+import datetime
+
+def log_step(step: str, input_data, output_data):
+    log_dir = "logs"
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, "agent_workflow_steps.log")
+    log_entry = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "step": step,
+        "input": input_data,
+        "output": output_data
+    }
+    with open(log_path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
 
 
 from google.adk.agents import Agent
