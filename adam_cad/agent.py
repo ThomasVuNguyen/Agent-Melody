@@ -1,8 +1,71 @@
 from google.adk.agents import LlmAgent, SequentialAgent
+from adam_cad.render import render_scad_multi_angle
+import tempfile
+import os
+import json
+from typing import List
 
 
 def curse() -> str:
     return "Fuck you"
+
+
+import datetime
+
+def get_unique_run_folder(prefix: str = "run") -> str:
+    """
+    Returns a unique subfolder path under 'render/' based on timestamp.
+    """
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    base_dir = os.path.join(os.getcwd(), "render")
+    run_folder = os.path.join(base_dir, f"{prefix}_{timestamp}")
+    os.makedirs(run_folder, exist_ok=True)
+    return run_folder
+
+
+def write_scad_file(openscad_code: str, run_folder: str, prefix: str = "cad_model") -> str:
+    """
+    Writes OpenSCAD code to a .scad file in the given run_folder and returns the file path.
+    """
+    scad_file = os.path.join(run_folder, f"{prefix}.scad")
+    with open(scad_file, "w") as f:
+        f.write(openscad_code)
+    return scad_file
+
+
+def render_tool(openscad_code: str, output_prefix: str = "render") -> List[str]:
+    """
+    Renders OpenSCAD code from multiple angles and returns a list of image paths, all in a unique subfolder.
+    Args:
+        openscad_code (str): The OpenSCAD code to render
+        output_prefix (str): Prefix for output image files
+    Returns:
+        List[str]: List of rendered image file paths
+    """
+    run_folder = get_unique_run_folder(output_prefix)
+    scad_file = write_scad_file(openscad_code, run_folder, prefix=output_prefix)
+    image_prefix = os.path.abspath(os.path.join(run_folder, output_prefix))
+    render_scad_multi_angle(scad_file, image_prefix)
+    image_paths = [f"{image_prefix}_{i+1}.png" for i in range(9)]
+    return image_paths
+
+
+def evaluate_tool(instruction: str, openscad_code: str, image_paths: List[str]) -> dict:
+    """
+    Evaluates the rendered images against the instruction and code.
+    Args:
+        instruction (str): The user instruction
+        openscad_code (str): The OpenSCAD code
+        image_paths (List[str]): List of rendered image file paths
+    Returns:
+        dict: Score and comments
+    """
+    # Placeholder logic, should be replaced with actual evaluation
+    return {
+        "score": 100,
+        "comments": f"Evaluation complete for images: {json.dumps(image_paths)}"
+    }
+
 
 cad_agent = LlmAgent(
     name="cad_engineer",
@@ -11,25 +74,39 @@ cad_agent = LlmAgent(
         "A senior engineer at building OPENSCAD models"
     ),
     instruction=(
-        "Given instructions and product requirements, you will create OPENSCAD code. Your response should include only the OPENSCAD code, complete and working"
+        "Given instructions and product requirements, you will create OPENSCAD code. Your response should include only the OPENSCAD code, complete and working."
     ),
-    tools=[curse],
+    tools=[],
+)
+
+render_agent = LlmAgent(
+    name="render_agent",
+    model="gemini-2.5-pro-preview-05-06",
+    description=(
+        "Renders SCAD models from code and outputs images."
+    ),
+    instruction=(
+        "Given OpenSCAD code, render images from multiple angles using render_tool."
+    ),
+    tools=[render_tool],
 )
 
 evaluate_agent = LlmAgent(
-    name="cad_engineer",
+    name="evaluate_agent",
     model="gemini-2.5-pro-preview-05-06",
     description=(
-        "The evaluator of the generated OPENSCAD code"
+        "Evaluates rendered images and OpenSCAD code against the original instruction."
     ),
     instruction=(
-        "Given an instruction object, a OPENSCAD code, and rendered images of the OPENSCAD code, you will evalaute how close the rendered image is to the instruction object. Your response should include a score out of 100 & additional comments"
+        "Given the instruction, OpenSCAD code, and rendered images, evaluate how close the result is to the instruction. Return a score out of 100 and comments."
     ),
-    tools=[curse],
+    tools=[evaluate_tool],
 )
 
+# The SequentialAgent below is a placeholder for actual chaining logic.
+# For full automation, consider implementing a custom orchestration or workflow agent.
 root_agent = SequentialAgent(
     name="cad_generator_agent",
-    description="Execute a sequence of generating OPENSCAD, render, and evaluate the rendered image",
-    sub_agents=[cad_agent, evaluate_agent],
+    description="Execute a sequence: generate OpenSCAD, render images, evaluate result.",
+    sub_agents=[cad_agent, render_agent, evaluate_agent],
 )
