@@ -103,8 +103,45 @@ evaluate_agent = LlmAgent(
     tools=[evaluate_tool],
 )
 
-# The SequentialAgent below is a placeholder for actual chaining logic.
-# For full automation, consider implementing a custom orchestration or workflow agent.
+import re
+
+class LoopAgent:
+    def __init__(self, cad_agent, render_agent, evaluate_agent, target_score=90, max_iters=5):
+        self.cad_agent = cad_agent
+        self.render_agent = render_agent
+        self.evaluate_agent = evaluate_agent
+        self.target_score = target_score
+        self.max_iters = max_iters
+
+    def run(self, instruction):
+        feedback = ""
+        for i in range(self.max_iters):
+            # Step 1: Generate code (with feedback if not first round)
+            if feedback:
+                prompt = f"{instruction}\nFeedback from last evaluation: {feedback}\nPlease improve the design."
+            else:
+                prompt = instruction
+            # Call CAD agent
+            openscad_code = self.cad_agent(prompt)
+            # Step 2: Render images
+            image_paths = self.render_agent(openscad_code)
+            # Step 3: Evaluate
+            eval_result = self.evaluate_agent(instruction, openscad_code, image_paths)
+            score = eval_result.get("score", 0)
+            comments = eval_result.get("comments", "")
+            feedback = comments
+            print(f"Iteration {i+1}: Score = {score}, Feedback = {comments}")
+            # Check for success condition
+            if score >= self.target_score and re.search(r"all required features satisfied", comments, re.IGNORECASE):
+                print("Design evaluated well! Stopping loop.")
+                return openscad_code, image_paths, eval_result
+        print("Max iterations reached. Returning last result.")
+        return openscad_code, image_paths, eval_result
+
+# Example usage:
+# loop_agent = LoopAgent(cad_agent, render_agent, evaluate_agent)
+# loop_agent.run("Your instruction here")
+
 root_agent = SequentialAgent(
     name="cad_generator_agent",
     description="Execute a sequence: generate OpenSCAD, render images, evaluate result.",
