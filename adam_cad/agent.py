@@ -5,10 +5,6 @@ import os
 import json
 from typing import List
 
-# Streaming callback for all LlmAgents
-def streaming_callback(llm_response, callback_context):
-    print(llm_response.text, end="", flush=True)
-    return llm_response
 
 
 def curse() -> str:
@@ -78,7 +74,6 @@ describe_agent = LlmAgent(
     description="Expert at summarizing and extracting key requirements from a prompt.",
     instruction="You are a requirements analyst. Given a prompt, return a detailed and precise description of the reference object, including all key features, dimensions, and visual style. Only return the description.",
     tools=[],
-    after_model_callback=streaming_callback,
 )
 
 cad_agent = LlmAgent(
@@ -91,7 +86,6 @@ cad_agent = LlmAgent(
         "Given instructions and product requirements, you will create OPENSCAD code. Your response should include only the OPENSCAD code, complete and working."
     ),
     tools=[],
-    after_model_callback=streaming_callback,
 )
 
 polish_agent = LlmAgent(
@@ -102,8 +96,7 @@ polish_agent = LlmAgent(
         "Given OpenSCAD code and a reference description, improve the design to make it more beautiful, modern, and manufacturable. Add curves, fillets, smooth transitions, and any other aesthetic or ergonomic improvements while keeping all required features. Return only the improved OpenSCAD code."
     ),
     tools=[],
-    after_model_callback=streaming_callback,
-)
+    )
 
 render_agent = LlmAgent(
     name="render_agent",
@@ -111,7 +104,6 @@ render_agent = LlmAgent(
     description="Expert at rendering OpenSCAD code from multiple angles.",
     instruction="Given OpenSCAD code, return a list of image paths for renders from multiple angles. Only return the list of paths.",
     tools=[render_tool],
-    after_model_callback=streaming_callback,
 )
 
 evaluate_agent = LlmAgent(
@@ -131,8 +123,7 @@ evaluate_agent = LlmAgent(
         "Be harsh: only give a score of 90+ if the design is flawless in all respects."
     ),
     tools=[evaluate_tool],
-    after_model_callback=streaming_callback,
-)
+    )
 
 import re
 import datetime
@@ -158,6 +149,6 @@ from pydantic import Field
 root_agent = LoopAgent(
     name="loop_agent",
     sub_agents=[
-        # describe_agent, 
+        #describe_agent, 
         cad_agent, polish_agent, render_agent, evaluate_agent],
 )
