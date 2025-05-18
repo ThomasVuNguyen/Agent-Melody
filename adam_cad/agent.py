@@ -1,4 +1,4 @@
-from google.adk.agents import LlmAgent, SequentialAgent
+from google.adk.agents import LlmAgent, SequentialAgent, LoopAgent
 from adam_cad.render import render_scad_multi_angle
 import tempfile
 import os
@@ -67,6 +67,18 @@ def evaluate_tool(instruction: str, openscad_code: str, image_paths: List[str]) 
     }
 
 
+describe_agent = LlmAgent(
+    name="describe_agent",
+    model="gemini-2.5-pro-preview-05-06",
+    description="Creates a very detailed, technical, and visual description of the object from a prompt.",
+    instruction=(
+        "Given a prompt, provide a highly detailed, technical, and visual description of the object, "
+        "including all relevant features, dimensions, and distinguishing characteristics. "
+        "This description will be used as a reference for all subsequent design, rendering, and evaluation steps."
+    ),
+    tools=[],
+)
+
 cad_agent = LlmAgent(
     name="cad_engineer",
     model="gemini-2.5-pro-preview-05-06",
@@ -75,6 +87,16 @@ cad_agent = LlmAgent(
     ),
     instruction=(
         "Given instructions and product requirements, you will create OPENSCAD code. Your response should include only the OPENSCAD code, complete and working."
+    ),
+    tools=[],
+)
+
+polish_agent = LlmAgent(
+    name="polish_agent",
+    model="gemini-2.5-pro-preview-05-06",
+    description="Improves and beautifies functional OpenSCAD code, adding curves, fillets, and making the design more visually appealing and manufacturable.",
+    instruction=(
+        "Given OpenSCAD code and a reference description, improve the design to make it more beautiful, modern, and manufacturable. Add curves, fillets, smooth transitions, and any other aesthetic or ergonomic improvements while keeping all required features. Return only the improved OpenSCAD code."
     ),
     tools=[],
 )
@@ -95,55 +117,29 @@ evaluate_agent = LlmAgent(
     name="evaluate_agent",
     model="gemini-2.5-pro-preview-05-06",
     description=(
-        "Evaluates rendered images and OpenSCAD code against the original instruction."
+        "Extremely strict evaluator for rendered images and OpenSCAD code against the original instruction and reference."
     ),
     instruction=(
-        "Given the instruction, OpenSCAD code, and rendered images, evaluate how close the result is to the instruction. Return a score out of 100 and comments."
+        "You are a world-class industrial design reviewer. "
+        "Given the instruction, reference description, OpenSCAD code, and rendered images, "
+        "evaluate with absolute strictness. "
+        "Deduct points for any missing, extra, or ambiguous features, even if minor. "
+        "The design must be beautiful, manufacturable, and 3D printable. "
+        "Reject any design that is not perfectly to spec, not fully manufacturable, or not aesthetically excellent. "
+        "Return a score out of 100 and detailed comments. "
+        "Be harsh: only give a score of 90+ if the design is flawless in all respects."
     ),
     tools=[evaluate_tool],
 )
 
 import re
 
-class LoopAgent:
-    def __init__(self, cad_agent, render_agent, evaluate_agent, target_score=90, max_iters=5):
-        self.cad_agent = cad_agent
-        self.render_agent = render_agent
-        self.evaluate_agent = evaluate_agent
-        self.target_score = target_score
-        self.max_iters = max_iters
 
-    def run(self, instruction):
-        feedback = ""
-        for i in range(self.max_iters):
-            # Step 1: Generate code (with feedback if not first round)
-            if feedback:
-                prompt = f"{instruction}\nFeedback from last evaluation: {feedback}\nPlease improve the design."
-            else:
-                prompt = instruction
-            # Call CAD agent
-            openscad_code = self.cad_agent(prompt)
-            # Step 2: Render images
-            image_paths = self.render_agent(openscad_code)
-            # Step 3: Evaluate
-            eval_result = self.evaluate_agent(instruction, openscad_code, image_paths)
-            score = eval_result.get("score", 0)
-            comments = eval_result.get("comments", "")
-            feedback = comments
-            print(f"Iteration {i+1}: Score = {score}, Feedback = {comments}")
-            # Check for success condition
-            if score >= self.target_score and re.search(r"all required features satisfied", comments, re.IGNORECASE):
-                print("Design evaluated well! Stopping loop.")
-                return openscad_code, image_paths, eval_result
-        print("Max iterations reached. Returning last result.")
-        return openscad_code, image_paths, eval_result
+from google.adk.agents import Agent
 
-# Example usage:
-# loop_agent = LoopAgent(cad_agent, render_agent, evaluate_agent)
-# loop_agent.run("Your instruction here")
+from pydantic import Field
 
-root_agent = SequentialAgent(
-    name="cad_generator_agent",
-    description="Execute a sequence: generate OpenSCAD, render images, evaluate result.",
-    sub_agents=[cad_agent, render_agent, evaluate_agent],
+root_agent = LoopAgent(
+    name="loop_agent",
+    sub_agents=[describe_agent, cad_agent, polish_agent, render_agent, evaluate_agent],
 )
